@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="theme-color" content="#1a3a1a" />
+  <meta name="description" content="Plant Disease Detector – snap a leaf, get instant diagnosis and treatment advice." />
+  <title>Shamba Smart – Plant Disease Detector</title>
+
+  <!-- PWA manifest -->
+  <link rel="manifest" href="manifest.json" />
+
+  <!-- Preconnect to CDN for TF.js (offline fallback) -->
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+
+  <style>
+    /* ─── DESIGN SYSTEM ─────────────────────────────────────── */
+    :root {
+      --green-900: #0d2b0d;
+      --green-800: #1a3a1a;
+      --green-700: #2d5a2d;
+      --green-600: #3d7a3d;
+      --green-500: #4e9e4e;
+      --green-400: #6abf6a;
+      --green-300: #90d490;
+      --green-100: #e8f5e8;
+      --earth:     #8b5e3c;
+      --earth-lt:  #c49068;
+      --gold:      #f4c430;
+      --red-err:   #c0392b;
+      --red-lt:    #fdecea;
+      --orange:    #e67e22;
+      --orange-lt: #fef3e7;
+      --text:      #1a1a1a;
+      --text-muted:#5a6a5a;
+      --surface:   #ffffff;
+      --bg:        #f4faf4;
+      --border:    #d4e8d4;
+      --radius:    14px;
+      --radius-sm: 8px;
+      --shadow:    0 4px 24px rgba(0,0,0,0.10);
+      --transition:180ms cubic-bezier(0.4,0,0.2,1);
+      --font-body: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { font-size: 16px; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      font-family: var(--font-body);
+      background:  var(--bg);
+      color:       var(--text);
+      min-height:  100dvh;
+      overflow-x:  hidden;
+    }
+
+    /* ─── HEADER ────────────────────────────────────────────── */
+    .app-header {
+      background:  var(--green-800);
+      color:       #fff;
+      padding:     16px 20px 14px;
+      display:     flex;
+      align-items: center;
+      gap:         12px;
+      position:    sticky;
+      top:         0;
+      z-index:     100;
+      box-shadow:  0 2px 12px rgba(0,0,0,.25);
+    }
+    .app-header .logo {
+      width: 38px; height: 38px;
+      background: var(--green-400);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; flex-shrink: 0;
+    }
+    .app-header h1 {
+      font-size: 1.15rem; font-weight: 700; letter-spacing: -.3px;
+    }
+    .app-header p {
+      font-size: 0.72rem; opacity: .75; margin-top: 1px;
+    }
+    .offline-badge {
+      margin-left: auto;
+      background: var(--gold);
+      color: var(--green-900);
+      font-size: 0.65rem; font-weight: 700;
+      padding: 3px 8px; border-radius: 20px;
+      display: none;
+      text-transform: uppercase; letter-spacing: .5px;
+    }
+    .offline-badge.visible { display: block; }
+
+    /* ─── MAIN CONTENT ──────────────────────────────────────── */
+    .container {
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 20px 16px 40px;
+    }
+
+    /* ─── CAPTURE SECTION ───────────────────────────────────── */
+    .capture-card {
+      background:    var(--surface);
+      border-radius: var(--radius);
+      border:        2px dashed var(--green-400);
+      padding:       28px 20px;
+      text-align:    center;
+      cursor:        pointer;
+      transition:    border-color var(--transition), background var(--transition);
+      position:      relative;
+      overflow:      hidden;
+    }
+    .capture-card:hover, .capture-card:focus-within {
+      border-color: var(--green-600);
+      background:   var(--green-100);
+    }
+    .capture-card.has-image {
+      border-style: solid;
+      border-color: var(--green-500);
+      padding:      0;
+    }
+
+    /* ─── IMAGE PREVIEW ─────────────────────────────────────── */
+    #preview-wrap {
+      display:  none;
+      position: relative;
+    }
+    #preview-wrap.visible { display: block; }
+    #preview-img {
+      width:         100%;
+      aspect-ratio:  4/3;
+      object-fit:    cover;
+      border-radius: calc(var(--radius) - 2px);
+      display:       block;
+    }
+    .preview-overlay {
+      position:   absolute; inset: 0;
+      border-radius: calc(var(--radius) - 2px);
+      background: linear-gradient(to top, rgba(0,0,0,.55) 0%, transparent 50%);
+      display:    flex; align-items: flex-end;
+      padding:    14px;
+    }
+    .retake-btn {
+      background: rgba(255,255,255,.18);
+      border:     1.5px solid rgba(255,255,255,.5);
+      color:      #fff;
+      font-size:  0.82rem; font-weight: 600;
+      padding:    7px 16px;
+      border-radius: 30px;
+      cursor:     pointer;
+      backdrop-filter: blur(4px);
+      transition: background var(--transition);
+    }
+    .retake-btn:hover { background: rgba(255,255,255,.30); }
+
+    /* ─── PLACEHOLDER ICONS ─────────────────────────────────── */
+    .capture-placeholder {
+      padding: 8px 0 4px;
+    }
+    .capture-placeholder .icon-wrap {
+      width: 72px; height: 72px;
+      background: var(--green-100);
+      border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 2.4rem;
+      margin-bottom: 14px;
+    }
+    .capture-placeholder h2 {
+      font-size: 1.05rem; font-weight: 700;
+      color: var(--green-800); margin-bottom: 6px;
+    }
+    .capture-placeholder p {
+      font-size: 0.82rem; color: var(--text-muted); line-height: 1.5;
+    }
+
+    /* ─── CAPTURE BUTTONS ───────────────────────────────────── */
+    .btn-row {
+      display: flex; gap: 10px;
+      margin-top: 18px; justify-content: center;
+    }
+    .btn {
+      display:        inline-flex;
+      align-items:    center; gap: 7px;
+      padding:        11px 20px;
+      border-radius:  30px;
+      font-size:      0.88rem; font-weight: 700;
+      border:         none; cursor: pointer;
+      transition:     all var(--transition);
+      text-decoration: none;
+      white-space:    nowrap;
+      -webkit-user-select: none; user-select: none;
+    }
+    .btn-primary {
+      background: var(--green-600); color: #fff;
+      box-shadow: 0 3px 12px rgba(77,158,77,.35);
+    }
+    .btn-primary:hover { background: var(--green-700); transform: translateY(-1px); }
+    .btn-primary:active { transform: translateY(0); }
+
+    .btn-secondary {
+      background: var(--surface); color: var(--green-700);
+      border: 1.5px solid var(--green-400);
+    }
+    .btn-secondary:hover { background: var(--green-100); }
+
+    .btn-full {
+      width: 100%; justify-content: center;
+      padding: 14px 20px; font-size: 1rem;
+      border-radius: var(--radius);
+      margin-top: 14px;
+      box-shadow: 0 4px 16px rgba(77,158,77,.30);
+    }
+    .btn:disabled { opacity: .5; pointer-events: none; }
+
+    /* Hidden file inputs */
+    #camera-input, #file-input {
+      position: absolute; inset: 0;
+      opacity: 0; cursor: pointer;
+      width: 100%; height: 100%;
+    }
+
+    /* ─── ANALYSE BUTTON ────────────────────────────────────── */
+    #analyse-btn {
+      display: none;
+    }
+    #analyse-btn.visible { display: flex; }
+
+    /* ─── LOADER ────────────────────────────────────────────── */
+    .loader-wrap {
+      display:    none;
+      text-align: center;
+      padding:    30px 20px;
+    }
+    .loader-wrap.visible { display: block; }
+    .spinner {
+      width: 52px; height: 52px;
+      border: 5px solid var(--green-200, #c8e6c8);
+      border-top-color: var(--green-600);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loader-wrap p { font-size: .9rem; color: var(--text-muted); }
+
+    /* ─── RESULT CARD ───────────────────────────────────────── */
+    .result-card {
+      display:       none;
+      background:    var(--surface);
+      border-radius: var(--radius);
+      box-shadow:    var(--shadow);
+      overflow:      hidden;
+      margin-top:    0;
+    }
+    .result-card.visible { display: block; }
+
+    .result-header {
+      padding:    18px 20px 14px;
+      display:    flex; align-items: flex-start; gap: 14px;
+    }
+    .severity-icon {
+      width: 46px; height: 46px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.6rem; flex-shrink: 0;
+    }
+    .sev-none    { background: var(--green-100); }
+    .sev-low     { background: #fffde7; }
+    .sev-medium  { background: var(--orange-lt); }
+    .sev-high    { background: var(--red-lt); }
+
+    .result-title { font-size: 1.1rem; font-weight: 800; line-height: 1.25; }
+    .result-crop  { font-size: .78rem; color: var(--text-muted); margin-top: 3px; }
+
+    .confidence-bar-wrap {
+      padding: 0 20px 16px;
+    }
+    .conf-label {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: .78rem; color: var(--text-muted); margin-bottom: 5px;
+    }
+    .conf-pct { font-weight: 700; font-size: .9rem; color: var(--green-700); }
+    .confidence-bar {
+      height:        8px;
+      background:    var(--border);
+      border-radius: 10px;
+      overflow:      hidden;
+    }
+    .confidence-fill {
+      height: 100%; border-radius: 10px;
+      background: linear-gradient(90deg, var(--green-400), var(--green-600));
+      transition: width 0.8s cubic-bezier(0.4,0,0.2,1);
+      width: 0%;
+    }
+
+    /* ─── TABS ──────────────────────────────────────────────── */
+    .tabs {
+      display: flex; border-bottom: 1.5px solid var(--border);
+      padding: 0 4px;
+    }
+    .tab-btn {
+      flex: 1; padding: 10px 8px;
+      font-size: .78rem; font-weight: 700; text-align: center;
+      background: none; border: none; cursor: pointer;
+      color: var(--text-muted);
+      border-bottom: 2.5px solid transparent;
+      transition: color var(--transition), border-color var(--transition);
+      margin-bottom: -1.5px;
+    }
+    .tab-btn.active { color: var(--green-700); border-bottom-color: var(--green-600); }
+
+    .tab-pane { display: none; padding: 18px 20px 20px; }
+    .tab-pane.active { display: block; }
+
+    /* ─── TREATMENT SECTIONS ────────────────────────────────── */
+    .treatment-row {
+      display: flex; gap: 10px; align-items: flex-start;
+      margin-bottom: 14px;
+    }
+    .treatment-row:last-child { margin-bottom: 0; }
+    .t-icon {
+      width: 32px; height: 32px; flex-shrink: 0;
+      background: var(--green-100); border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem;
+    }
+    .t-label { font-size: .72rem; color: var(--text-muted); font-weight: 600;
+               text-transform: uppercase; letter-spacing: .4px; }
+    .t-text  { font-size: .88rem; color: var(--text); line-height: 1.5; margin-top: 2px; }
+
+    .urgency-banner {
+      background: var(--red-lt);
+      border-left: 3px solid var(--red-err);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      font-size: .85rem;
+      color: var(--red-err);
+      font-weight: 600;
+      margin-bottom: 14px;
+    }
+    .urgency-banner.medium {
+      background: var(--orange-lt);
+      border-color: var(--orange);
+      color: var(--orange);
+    }
+    .urgency-banner.low, .urgency-banner.none {
+      background: var(--green-100);
+      border-color: var(--green-500);
+      color: var(--green-700);
+    }
+
+    .local-tip-box {
+      background: linear-gradient(135deg, var(--green-100), #fff);
+      border: 1px solid var(--green-300);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      font-size: .85rem; line-height: 1.5;
+      margin-top: 14px;
+    }
+    .local-tip-box strong { color: var(--green-700); }
+
+    /* ─── TOP-3 LIST ────────────────────────────────────────── */
+    .top3-list { list-style: none; }
+    .top3-list li {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: .86rem;
+    }
+    .top3-list li:last-child { border-bottom: none; }
+    .top3-badge {
+      font-size: .78rem; font-weight: 700;
+      background: var(--green-100); color: var(--green-700);
+      padding: 2px 8px; border-radius: 20px;
+    }
+
+    /* ─── LOW CONFIDENCE WARNING ────────────────────────────── */
+    .low-conf-warning {
+      background: #fffde7;
+      border: 1px solid #f9a825;
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      font-size: .83rem; color: #7b6000;
+      margin-bottom: 16px;
+      display: none;
+    }
+    .low-conf-warning.visible { display: block; }
+
+    /* ─── ERROR TOAST ───────────────────────────────────────── */
+    .toast {
+      position:    fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background:  var(--red-err); color: #fff;
+      padding:     12px 20px; border-radius: 30px;
+      font-size:   .88rem; font-weight: 600;
+      box-shadow:  0 4px 20px rgba(0,0,0,.25);
+      opacity:     0; pointer-events: none;
+      transition:  opacity .3s, transform .3s;
+      z-index:     1000; max-width: 320px;
+      text-align:  center;
+    }
+    .toast.visible { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+    .toast.retake  { background: var(--earth); }
+
+    /* ─── NEW SCAN BUTTON ───────────────────────────────────── */
+    .new-scan-btn {
+      display: block; width: 100%;
+      padding: 13px; border-radius: var(--radius);
+      background: var(--green-100); color: var(--green-700);
+      border: 1.5px solid var(--green-300);
+      font-size: .9rem; font-weight: 700;
+      cursor: pointer; text-align: center;
+      margin-top: 12px;
+      transition: background var(--transition);
+    }
+    .new-scan-btn:hover { background: var(--green-300); }
+
+    /* ─── OFFLINE SECTION ───────────────────────────────────── */
+    .offline-note {
+      font-size: .75rem; color: var(--text-muted);
+      text-align: center; margin-top: 8px;
+    }
+    #offline-status { display: none; }
+    #offline-status.visible { display: block; }
+
+    /* ─── RESPONSIVE ────────────────────────────────────────── */
+    @media (max-width: 400px) {
+      .container { padding: 14px 12px 36px; }
+      .btn-row   { flex-wrap: wrap; }
+      .btn       { font-size: .82rem; padding: 10px 14px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── HEADER ─────────────────────────────────────────── -->
+  <header class="app-header">
+    <div class="logo">🌿</div>
+    <div>
+      <h1>Shamba Smart</h1>
+      <p>Plant Disease Detector</p>
+    </div>
+    <span class="offline-badge" id="offline-badge">Offline</span>
+  </header>
+
+  <!-- ── MAIN ───────────────────────────────────────────── -->
+  <main class="container" id="main-container">
+
+    <!-- 1. Capture Card -->
+    <div class="capture-card" id="capture-card">
+      <!-- Hidden inputs -->
+      <input type="file" id="camera-input" accept="image/*" capture="environment"
+             aria-label="Open camera" />
+
+      <div class="capture-placeholder" id="capture-placeholder">
+        <div class="icon-wrap">📷</div>
+        <h2>Scan Your Crop</h2>
+        <p>Take a photo of a plant leaf or upload from your gallery to detect diseases instantly.</p>
+
+        <div class="btn-row">
+          <label class="btn btn-primary" tabindex="0"
+                 style="cursor:pointer; position:relative; overflow:hidden;">
+            📷 Open Camera
+            <input type="file" accept="image/*" capture="environment"
+                   style="position:absolute;inset:0;opacity:0;cursor:pointer;"
+                   onchange="handleFileSelect(this)" />
+          </label>
+
+          <label class="btn btn-secondary" tabindex="0"
+                 style="cursor:pointer; position:relative; overflow:hidden;">
+            🖼 Gallery
+            <input type="file" accept="image/jpeg,image/png,image/webp"
+                   style="position:absolute;inset:0;opacity:0;cursor:pointer;"
+                   onchange="handleFileSelect(this)" />
+          </label>
+        </div>
+
+        <p class="offline-note" id="offline-status">
+          📶 Offline mode active — using on-device AI model
+        </p>
+      </div>
+
+      <!-- Preview -->
+      <div id="preview-wrap">
+        <img id="preview-img" alt="Selected leaf image" />
+        <div class="preview-overlay">
+          <button class="retake-btn" onclick="resetCapture()">🔄 Retake</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Analyse Button -->
+    <button class="btn btn-primary btn-full" id="analyse-btn" onclick="analyseImage()">
+      🔍 Analyse Disease
+    </button>
+
+    <!-- 3. Loader -->
+    <div class="loader-wrap" id="loader">
+      <div class="spinner"></div>
+      <p id="loader-text">Analysing your plant…</p>
+    </div>
+
+    <!-- 4. Result Card -->
+    <div class="result-card" id="result-card">
+
+      <!-- Header -->
+      <div class="result-header">
+        <div class="severity-icon sev-none" id="sev-icon">🌿</div>
+        <div>
+          <div class="result-title" id="result-disease">—</div>
+          <div class="result-crop"  id="result-crop">—</div>
+        </div>
+      </div>
+
+      <!-- Confidence bar -->
+      <div class="confidence-bar-wrap">
+        <div class="conf-label">
+          <span>Model Confidence</span>
+          <span class="conf-pct" id="conf-pct">—</span>
+        </div>
+        <div class="confidence-bar">
+          <div class="confidence-fill" id="conf-fill"></div>
+        </div>
+      </div>
+
+      <!-- Low confidence warning -->
+      <div style="padding:0 20px;">
+        <div class="low-conf-warning" id="low-conf-warn">
+          ⚠️ Low confidence result. The image may be unclear or the disease may be uncommon.
+          Try taking a closer, clearer photo of the affected leaf.
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('treatment',this)">💊 Treatment</button>
+        <button class="tab-btn"        onclick="switchTab('prevention',this)">🛡 Prevention</button>
+        <button class="tab-btn"        onclick="switchTab('topresults',this)">📊 Top Results</button>
+      </div>
+
+      <!-- Treatment tab -->
+      <div class="tab-pane active" id="tab-treatment">
+        <div class="urgency-banner" id="urgency-banner">—</div>
+
+        <div class="treatment-row">
+          <div class="t-icon">🌿</div>
+          <div>
+            <div class="t-label">Organic / Home Remedy</div>
+            <div class="t-text" id="t-organic">—</div>
+          </div>
+        </div>
+        <div class="treatment-row">
+          <div class="t-icon">💊</div>
+          <div>
+            <div class="t-label">Chemical Treatment</div>
+            <div class="t-text" id="t-chemical">—</div>
+          </div>
+        </div>
+
+        <div class="local-tip-box">
+          <strong>🇰🇪 Kenya Tip:</strong>
+          <span id="t-local-tip">—</span>
+        </div>
+      </div>
+
+      <!-- Prevention tab -->
+      <div class="tab-pane" id="tab-prevention">
+        <div class="treatment-row">
+          <div class="t-icon">🔍</div>
+          <div>
+            <div class="t-label">Symptoms</div>
+            <div class="t-text" id="t-symptoms">—</div>
+          </div>
+        </div>
+        <div class="treatment-row">
+          <div class="t-icon">🛡</div>
+          <div>
+            <div class="t-label">Prevention Measures</div>
+            <div class="t-text" id="t-prevention">—</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Top 3 tab -->
+      <div class="tab-pane" id="tab-topresults">
+        <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:12px;">
+          Other possible matches from the AI model:
+        </p>
+        <ul class="top3-list" id="top3-list"></ul>
+      </div>
+
+      <!-- New scan -->
+      <div style="padding:4px 20px 20px;">
+        <button class="new-scan-btn" onclick="resetAll()">
+          📷 Scan Another Plant
+        </button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Toast notification -->
+  <div class="toast" id="toast" role="alert"></div>
+
+  <!-- ── SCRIPTS ─────────────────────────────────────────── -->
+  <!--
+    TensorFlow.js for offline inference (Part 4 - Option A).
+    Only loaded if the server is offline.
+    The model is loaded from a local path or via CDN.
+  -->
+  <script>
+  // ─────────────────────────────────────────────────────────
+  //  CONFIG
+  // ─────────────────────────────────────────────────────────
+  const API_URL      = "/api/predict";          // Backend endpoint
+  const TFLITE_MODEL = "./model/tfjs/model.json"; // Local TF.js model
+  const IMG_SIZE     = 224;
+
+  // ─────────────────────────────────────────────────────────
+  //  STATE
+  // ─────────────────────────────────────────────────────────
+  let selectedFile  = null;
+  let isOffline     = !navigator.onLine;
+  let tfModel       = null;
+  let classLabels   = null;
+
+  // ─────────────────────────────────────────────────────────
+  //  ONLINE / OFFLINE DETECTION
+  // ─────────────────────────────────────────────────────────
+  function updateConnectivityUI() {
+    isOffline = !navigator.onLine;
+    const badge        = document.getElementById("offline-badge");
+    const offlineNote  = document.getElementById("offline-status");
+    badge.classList.toggle("visible", isOffline);
+    offlineNote.classList.toggle("visible", isOffline);
+
+    if (isOffline) {
+      loadTFJSModel();  // pre-load model when offline
+    }
+  }
+  window.addEventListener("online",  updateConnectivityUI);
+  window.addEventListener("offline", updateConnectivityUI);
+  updateConnectivityUI();
+
+  // ─────────────────────────────────────────────────────────
+  //  FILE SELECTION
+  // ─────────────────────────────────────────────────────────
+  function handleFileSelect(input) {
+    if (!input.files || input.files.length === 0) return;
+    const file = input.files[0];
+
+    // Basic client-side type check
+    if (!file.type.startsWith("image/")) {
+      showToast("Please select an image file (JPG or PNG).");
+      return;
+    }
+    // 20 MB limit
+    if (file.size > 20 * 1024 * 1024) {
+      showToast("Image is too large. Please choose one under 20 MB.");
+      return;
+    }
+
+    selectedFile = file;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = document.getElementById("preview-img");
+      img.src   = e.target.result;
+      document.getElementById("preview-wrap").classList.add("visible");
+      document.getElementById("capture-placeholder").style.display = "none";
+      document.getElementById("capture-card").classList.add("has-image");
+      document.getElementById("analyse-btn").classList.add("visible");
+
+      // Hide old results
+      document.getElementById("result-card").classList.remove("visible");
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function resetCapture() {
+    selectedFile = null;
+    document.getElementById("preview-img").src = "";
+    document.getElementById("preview-wrap").classList.remove("visible");
+    document.getElementById("capture-placeholder").style.display = "block";
+    document.getElementById("capture-card").classList.remove("has-image");
+    document.getElementById("analyse-btn").classList.remove("visible");
+  }
+
+  function resetAll() {
+    resetCapture();
+    document.getElementById("result-card").classList.remove("visible");
+    document.getElementById("loader").classList.remove("visible");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  // ─────────────────────────────────────────────────────────
+  //  ANALYSE — ONLINE MODE (server API)
+  // ─────────────────────────────────────────────────────────
+  async function analyseImage() {
+    if (!selectedFile) { showToast("Please select an image first."); return; }
+
+    showLoader("Analysing your plant…");
+    document.getElementById("analyse-btn").classList.remove("visible");
+
+    try {
+      if (isOffline) {
+        await analyseOffline();
+      } else {
+        await analyseOnline();
+      }
+    } catch (err) {
+      console.error(err);
+      hideLoader();
+      document.getElementById("analyse-btn").classList.add("visible");
+
+      if (!navigator.onLine) {
+        isOffline = true;
+        updateConnectivityUI();
+        showToast("No internet. Trying offline mode…", false);
+        setTimeout(() => analyseImage(), 1000);
+      } else {
+        showToast("Could not connect to the server. Please try again.");
+      }
+    }
+  }
+
+  async function analyseOnline() {
+    // Compress image before upload (reduces data usage)
+    const compressed = await compressImage(selectedFile, 640);
+
+    const formData = new FormData();
+    formData.append("image", compressed, "leaf.jpg");
+
+    const resp = await fetch(API_URL, {
+      method: "POST",
+      body:   formData,
+    });
+
+    const data = await resp.json();
+
+    if (!resp.ok || !data.success) {
+      hideLoader();
+      const err = data.error || {};
+      if (err.retake) {
+        showToast(err.message || "Please retake the photo.", true);
+      } else {
+        showToast(err.message || "Prediction failed.");
+      }
+      document.getElementById("analyse-btn").classList.add("visible");
+      return;
+    }
+
+    hideLoader();
+    renderResult(data);
+  }
+
+  // ─────────────────────────────────────────────────────────
+  //  ANALYSE — OFFLINE MODE (TensorFlow.js in-browser)
+  // ─────────────────────────────────────────────────────────
+  async function analyseOffline() {
+    setLoaderText("Loading on-device AI model…");
+
+    // Dynamically load TF.js only when needed
+    if (!window.tf) {
+      await loadScript("https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js");
+    }
+
+    if (!tfModel) {
+      try {
+        tfModel = await tf.loadGraphModel(TFLITE_MODEL);
+      } catch (e) {
+        throw new Error("Offline model not found. Please connect to the internet for first use.");
+      }
+    }
+
+    if (!classLabels) {
+      const resp = await fetch("./model/class_labels.json");
+      classLabels = await resp.json();
+    }
+
+    setLoaderText("Running on-device analysis…");
+
+    // Preprocess image
+    const tensor = await imageToTensor(selectedFile);
+
+    // Inference
+    const output = tfModel.predict(tensor);
+    const probs  = await output.data();
+    tensor.dispose();
+    output.dispose();
+
+    // Get top-3
+    const indices = Array.from(probs)
+      .map((p, i) => ({ p, i }))
+      .sort((a, b) => b.p - a.p)
+      .slice(0, 3);
+
+    const top3 = indices.map(({ p, i }) => ({
+      class_name : classLabels[i] || `Class ${i}`,
+      disease    : (classLabels[i] || "Unknown").replace(/___/g," - ").replace(/_/g," "),
+      confidence : +(p * 100).toFixed(1),
+    }));
+
+    const best = top3[0];
+
+    // Build synthetic response matching API shape
+    const syntheticData = {
+      success    : true,
+      prediction : {
+        disease        : best.disease,
+        crop           : best.class_name.split("___")[0].replace(/_/g," "),
+        confidence     : best.confidence / 100,
+        confidence_pct : best.confidence,
+        confident      : best.confidence > 45,
+        top3           : top3,
+        class_name     : best.class_name,
+      },
+      treatment  : getOfflineTreatment(best.class_name),
+      meta       : { model_mode: "tfjs_offline" },
+    };
+
+    hideLoader();
+    renderResult(syntheticData);
+  }
+
+  // Simple offline treatment fallback (partial map shown here)
+  function getOfflineTreatment(className) {
+    const known = {
+      "Tomato___Late_blight": {
+        severity: "high", urgency: "CRITICAL — act within 24 hours.",
+        organic: "Remove and burn infected plants.",
+        chemical: "Metalaxyl + Mancozeb (Ridomil Gold MZ). Spray every 5–7 days.",
+        prevention: "Avoid overhead irrigation. Use resistant varieties.",
+        symptoms: "Dark water-soaked patches; white mould on leaf underside.",
+        local_tip: "Major cause of tomato crop failure in Kenya's rainy season.",
+      },
+      "Corn_(maize)___Northern_Leaf_Blight": {
+        severity: "high", urgency: "Act immediately.",
+        organic: "Remove infected material. Improve drainage.",
+        chemical: "Tebuconazole or Propiconazole. Spray every 14 days.",
+        prevention: "Use resistant varieties. Rotate with beans or sunflower.",
+        symptoms: "Long tan cigar-shaped lesions on leaves.",
+        local_tip: "Peak risk during long rains. Report to extension officer.",
+      },
+    };
+    return known[className] || {
+      severity: "unknown", urgency: "Consult your local agrovet.",
+      organic: "Consult your local agriculture extension officer.",
+      chemical: "Contact your nearest agrovet for advice.",
+      prevention: "Practice good crop hygiene and regular scouting.",
+      symptoms: "See the disease name above for symptom details.",
+      local_tip: "Call Kenya Farmers Helpline: 0800 723 022 (Toll-free).",
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────
+  //  RENDER RESULT
+  // ─────────────────────────────────────────────────────────
+  function renderResult(data) {
+    const p = data.prediction;
+    const t = data.treatment || {};
+
+    // Disease & crop
+    document.getElementById("result-disease").textContent = p.disease || "Unknown";
+    document.getElementById("result-crop").textContent    = p.crop
+      ? `🌱 Crop: ${p.crop}`  : "";
+
+    // Severity icon
+    const sevMap = { none:"🌿", low:"💛", medium:"🟠", high:"🔴", unknown:"❓" };
+    const sev    = t.severity || "unknown";
+    document.getElementById("sev-icon").textContent = sevMap[sev] || "❓";
+    document.getElementById("sev-icon").className   = `severity-icon sev-${sev}`;
+
+    // Confidence bar (animate after small delay)
+    const pct = p.confidence_pct || +(p.confidence * 100).toFixed(1);
+    document.getElementById("conf-pct").textContent = `${pct}%`;
+    setTimeout(() => {
+      document.getElementById("conf-fill").style.width = `${Math.min(pct, 100)}%`;
+    }, 150);
+
+    // Low confidence warning
+    document.getElementById("low-conf-warn").classList.toggle("visible", !p.confident);
+
+    // Treatment
+    const urgency = document.getElementById("urgency-banner");
+    urgency.textContent = `⏰ ${t.urgency || "Consult a specialist."}`;
+    urgency.className   = `urgency-banner ${sev}`;
+
+    document.getElementById("t-organic").textContent    = t.organic    || "—";
+    document.getElementById("t-chemical").textContent   = t.chemical   || "—";
+    document.getElementById("t-local-tip").textContent  = t.local_tip  || "—";
+    document.getElementById("t-symptoms").textContent   = t.symptoms   || "—";
+    document.getElementById("t-prevention").textContent = t.prevention || "—";
+
+    // Top-3
+    const list = document.getElementById("top3-list");
+    list.innerHTML = "";
+    (p.top3 || []).forEach((item, idx) => {
+      const li   = document.createElement("li");
+      const name = document.createElement("span");
+      name.textContent = item.disease || item.class_name.replace(/___/g," - ").replace(/_/g," ");
+      const badge = document.createElement("span");
+      badge.className = "top3-badge";
+      badge.textContent = `${item.confidence}%`;
+      if (idx === 0) badge.style.background = "var(--green-400)";
+      li.appendChild(name);
+      li.appendChild(badge);
+      list.appendChild(li);
+    });
+
+    // Show result, reset tab
+    switchTab("treatment", document.querySelector(".tab-btn"));
+    document.getElementById("result-card").classList.add("visible");
+    document.getElementById("result-card").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  // ─────────────────────────────────────────────────────────
+  //  TABS
+  // ─────────────────────────────────────────────────────────
+  function switchTab(name, btn) {
+    document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.getElementById("tab-" + name).classList.add("active");
+    if (btn) btn.classList.add("active");
+  }
+
+  // ─────────────────────────────────────────────────────────
+  //  IMAGE COMPRESSION (reduce upload size for rural areas)
+  // ─────────────────────────────────────────────────────────
+  function compressImage(file, maxDim = 640, quality = 0.82) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const { width: w, height: h } = img;
+        const scale = Math.min(1, maxDim / Math.max(w, h));
+        const canvas = document.createElement("canvas");
+        canvas.width  = Math.round(w * scale);
+        canvas.height = Math.round(h * scale);
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(
+          (blob) => resolve(new File([blob], "leaf.jpg", { type: "image/jpeg" })),
+          "image/jpeg", quality
+        );
+      };
+      img.src = url;
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────
+  //  IMAGE → TENSOR (for TF.js offline inference)
+  // ─────────────────────────────────────────────────────────
+  function imageToTensor(file) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const canvas = document.createElement("canvas");
+        canvas.width  = IMG_SIZE;
+        canvas.height = IMG_SIZE;
+        canvas.getContext("2d").drawImage(img, 0, 0, IMG_SIZE, IMG_SIZE);
+        const tensor = tf.browser.fromPixels(canvas)
+          .toFloat()
+          .div(255.0)
+          .expandDims(0);   // shape: [1, 224, 224, 3]
+        resolve(tensor);
+      };
+      img.src = url;
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────
+  //  UI HELPERS
+  // ─────────────────────────────────────────────────────────
+  function showLoader(text) {
+    document.getElementById("loader-text").textContent = text;
+    document.getElementById("loader").classList.add("visible");
+    document.getElementById("result-card").classList.remove("visible");
+  }
+  function setLoaderText(text) {
+    document.getElementById("loader-text").textContent = text;
+  }
+  function hideLoader() {
+    document.getElementById("loader").classList.remove("visible");
+  }
+
+  let toastTimer;
+  function showToast(msg, isRetake = false) {
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.className   = `toast visible${isRetake ? " retake" : ""}`;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove("visible"), 4500);
+  }
+
+  function loadScript(src) {
+    return new Promise((res, rej) => {
+      const s = document.createElement("script");
+      s.src = src; s.async = true;
+      s.onload = res; s.onerror = rej;
+      document.head.appendChild(s);
+    });
+  }
+  </script>
+
+  <!-- PWA Service Worker registration -->
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker
+        .register("./sw.js")
+        .then(() => console.log("[SW] Registered"))
+        .catch((e) => console.warn("[SW] Registration failed:", e));
+    }
+  </script>
+
+</body>
+</html>
