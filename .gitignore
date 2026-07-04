@@ -1,0 +1,16 @@
+# Model files — too large for GitHub, stored on Hugging Face
+model/
+*.keras
+*.h5
+*.tflite
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs
+*.log
+
+# Clean model script (not needed in repo)
+clean_model.py
