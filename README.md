@@ -1,3 +1,2 @@
 # shamba-smart
-A Plant Disease Detection System that utilizes EfficientNetB4 classification architecture. It is tailored to the Kenyan setting with treatment reccomendations readily available within
-the local argovets and also features homemade remmedies recommended by KALRO(Kenya Agricultural and Livestock Research Organization)
+Shamba-smart is a Plant Disease Detection System that utilizes machine learning, specifically the EfficientNetB4 classification architecture in CNNs to identify crops with diseases and provide details such as the disease name, its causes and the remedy. It's tailored for the local Kenyan smallscale farmer with treatment recommendations readily available within the local argovets. It also features homemade remmedies recommended by KALRO(Kenya Agricultural and Livestock Research Organization)
